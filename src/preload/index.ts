@@ -4,6 +4,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 // Custom APIs for renderer
 const api = {
   chat: (message: string, config?: any) => ipcRenderer.invoke('ai:chat', message, config),
+  fetchModels: (config: any) => ipcRenderer.invoke('ai:fetch-models', config),
   chatStream: (message: string, config: any, onChunk: (chunk: string) => void, onDone: () => void, onError: (error: string) => void) => {
     ipcRenderer.send('ai:chat-stream', { message, config });
     
@@ -29,12 +30,14 @@ const api = {
 
     return cleanup; // Return cleanup function if needed
   },
+  chatStop: () => ipcRenderer.send('ai:chat-stop'),
   openDirectory: () => ipcRenderer.invoke('dialog:openDirectory'),
   openFile: () => ipcRenderer.invoke('dialog:openFile'),
   showSaveDialog: () => ipcRenderer.invoke('dialog:showSaveDialog'),
   readDirectory: (path: string) => ipcRenderer.invoke('fs:readDirectory', path),
   readFile: (path: string) => ipcRenderer.invoke('fs:readFile', path),
-  saveFile: (path: string, content: string) => ipcRenderer.invoke('fs:saveFile', path, content)
+  saveFile: (path: string, content: string) => ipcRenderer.invoke('fs:saveFile', path, content),
+  showOpenDialog: () => ipcRenderer.invoke('dialog:showOpenDialog')
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

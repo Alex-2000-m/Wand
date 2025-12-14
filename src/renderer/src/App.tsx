@@ -51,8 +51,13 @@ const PdfViewer = ({ content }: { content: string }) => {
 };
 
 function App() {
-  const [activeTab, setActiveTab] = useState('chat');
-  const [projectPath, setProjectPath] = useState<string | null>(null);
+  const [projectPath, setProjectPath] = useState<string | null>(() => {
+    return localStorage.getItem('wand_last_project_path');
+  });
+  
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem('wand_last_project_path') ? 'projects' : 'chat';
+  });
   
   // Editor State
   const [openFiles, setOpenFiles] = useState<EditorFile[]>([]);
@@ -64,6 +69,14 @@ function App() {
   const [rightWidth, setRightWidth] = useState(400);
   const [isDraggingLeft, setIsDraggingLeft] = useState(false);
   const [isDraggingRight, setIsDraggingRight] = useState(false);
+
+  useEffect(() => {
+    if (projectPath) {
+      localStorage.setItem('wand_last_project_path', projectPath);
+    } else {
+      localStorage.removeItem('wand_last_project_path');
+    }
+  }, [projectPath]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -413,7 +426,7 @@ function App() {
 
         {/* Right Sidebar - AI Assistant (Cursor-like) */}
         <div style={{ width: rightWidth }} className="flex flex-col bg-secondary flex-shrink-0">
-          <ChatInterface />
+          <ChatInterface workspacePath={projectPath} />
         </div>
       </div>
     </div>

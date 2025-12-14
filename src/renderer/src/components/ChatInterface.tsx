@@ -1,24 +1,146 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Mic, Bot, User, Settings, X, Sparkles } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
+import { Send, Paperclip, Mic, Bot, User, Settings, X, Sparkles, RefreshCw, ChevronDown, Check, RotateCcw, Square } from 'lucide-react';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  model?: string;
 }
 
-interface AISettings {
-  provider: string;
+interface ProviderConfig {
   apiKey: string;
-  model: string;
-  customModelId: string;
+  highSpeedTextModel: string;
+  standardTextModel: string;
+  longContextModel: string;
+  highSpeedMultimodalModel: string;
+  standardMultimodalModel: string;
+  embeddingModel: string;
+  rerankModel: string;
   baseUrl: string;
+  model: string;
   temperature: number;
 }
 
-const ChatInterface: React.FC = () => {
+interface AISettings extends ProviderConfig {
+  provider: string;
+  providerConfigs: Record<string, ProviderConfig>;
+}
+
+interface ModelSelectProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+  disabled?: boolean;
+}
+
+const ModelSelect: React.FC<ModelSelectProps> = ({ label, value, onChange, options, disabled }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMouseOverRef = useRef(false);
+
+  const handleMouseEnter = () => {
+    isMouseOverRef.current = true;
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  };
+
+  const handleMouseLeave = () => {
+    isMouseOverRef.current = false;
+    if (document.activeElement === searchInputRef.current) return;
+    closeTimeoutRef.current = setTimeout(() => {
+      setIsOpen(false);
+    }, 300);
+  };
+
+  return (
+    <div className="space-y-1 relative">
+      <label className="text-gray-400 block text-xs">{label}</label>
+      <div 
+        className="relative"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <div 
+            className={`w-full bg-[#2b2b2b] border border-[#3e3e3e] rounded p-2 text-white flex justify-between items-center ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+            <input
+                type="text"
+                className="bg-transparent border-none outline-none text-sm w-full text-white placeholder-gray-500"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder="Select or type model..."
+                disabled={disabled}
+                onClick={() => !disabled && setIsOpen(true)}
+            />
+            <ChevronDown 
+                size={14} 
+                className={`transition-transform flex-shrink-0 cursor-pointer ${isOpen ? 'rotate-180' : ''}`} 
+                onClick={() => !disabled && setIsOpen(!isOpen)}
+            />
+        </div>
+
+        {isOpen && !disabled && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-[#252526] border border-[#3e3e3e] rounded shadow-xl z-50 max-h-60 flex flex-col">
+                <div className="p-2 border-b border-[#3e3e3e] bg-[#252526] sticky top-0 z-10">
+                    <input 
+                        ref={searchInputRef}
+                        type="text"
+                        className="w-full bg-[#1e1e1e] border border-[#3e3e3e] rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-primary placeholder-gray-500"
+                        placeholder="Filter models..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onBlur={() => {
+                            if (!isMouseOverRef.current) setIsOpen(false);
+                        }}
+                    />
+                </div>
+                <div className="overflow-y-auto max-h-40">
+                    {options.filter(opt => opt.toLowerCase().includes(search.toLowerCase())).map(opt => (
+                        <div 
+                            key={opt}
+                            className={`px-2 py-1.5 hover:bg-[#3e3e3e] cursor-pointer text-sm truncate ${opt === value ? 'text-primary' : 'text-gray-200'}`}
+                            onClick={() => {
+                                onChange(opt);
+                                setIsOpen(false);
+                            }}
+                        >
+                            {opt}
+                        </div>
+                    ))}
+                    {options.length === 0 && <div className="p-2 text-gray-500 text-xs">No models found</div>}
+                </div>
+            </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+interface ChatInterfaceProps {
+  workspacePath?: string | null;
+}
+
+interface AttachedFile {
+  path: string;
+  name: string;
+  size?: number;
+}
+
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ workspacePath }) => {
   const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -28,14 +150,92 @@ const ChatInterface: React.FC = () => {
     }
   ]);
   const [showSettings, setShowSettings] = useState(false);
-  const [settings, setSettings] = useState<AISettings>({
-    provider: 'DeepSeek - DeepSeek 系列模型',
-    apiKey: '',
-    model: '自定义模型',
-    customModelId: 'deepseek-ai/DeepSeek-V3.2-Exp',
-    baseUrl: 'https://api.siliconflow.cn/v1',
-    temperature: 0.3
+  const [settings, setSettings] = useState<AISettings>(() => {
+    const saved = localStorage.getItem('wand_ai_settings');
+    const defaultProviderConfig: ProviderConfig = {
+      apiKey: '',
+      highSpeedTextModel: '',
+      standardTextModel: '',
+      longContextModel: '',
+      highSpeedMultimodalModel: '',
+      standardMultimodalModel: '',
+      embeddingModel: '',
+      rerankModel: '',
+      baseUrl: '',
+      model: '自定义模型',
+      temperature: 0.3
+    };
+
+    const defaultSettings: AISettings = {
+      provider: 'SiliconFlow (DeepSeek)',
+      ...defaultProviderConfig,
+      baseUrl: 'https://api.siliconflow.cn/v1',
+      providerConfigs: {
+        'SiliconFlow (DeepSeek)': {
+          ...defaultProviderConfig,
+          baseUrl: 'https://api.siliconflow.cn/v1'
+        },
+        'Aliyun Bailian (百炼)': {
+          ...defaultProviderConfig,
+          baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+        },
+        'OpenAI': {
+          ...defaultProviderConfig,
+          baseUrl: 'https://api.openai.com/v1'
+        },
+        'Custom': {
+          ...defaultProviderConfig
+        }
+      }
+    };
+    
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Ensure providerConfigs exists for migration
+      if (!parsed.providerConfigs) {
+        parsed.providerConfigs = defaultSettings.providerConfigs;
+        // Save current flat settings to the current provider config
+        if (parsed.provider) {
+            parsed.providerConfigs[parsed.provider] = {
+                apiKey: parsed.apiKey || '',
+                highSpeedTextModel: parsed.highSpeedTextModel || '',
+                standardTextModel: parsed.standardTextModel || '',
+                longContextModel: parsed.longContextModel || '',
+                highSpeedMultimodalModel: parsed.highSpeedMultimodalModel || '',
+                standardMultimodalModel: parsed.standardMultimodalModel || '',
+                embeddingModel: parsed.embeddingModel || '',
+                rerankModel: parsed.rerankModel || '',
+                baseUrl: parsed.baseUrl || '',
+                model: parsed.model || '自定义模型',
+                temperature: parsed.temperature || 0.3
+            };
+        }
+      }
+      return { ...defaultSettings, ...parsed };
+    }
+    return defaultSettings;
   });
+  const [availableModels, setAvailableModels] = useState<string[]>(() => {
+    const savedProviderModels = localStorage.getItem('wand_provider_models');
+    const providerModels = savedProviderModels ? JSON.parse(savedProviderModels) : {};
+    
+    // Migration for legacy single list (assuming it was SiliconFlow)
+    const legacyModels = localStorage.getItem('wand_available_models');
+    if (legacyModels && !providerModels['SiliconFlow (DeepSeek)']) {
+        try {
+            const parsedLegacy = JSON.parse(legacyModels);
+            if (Array.isArray(parsedLegacy)) {
+                providerModels['SiliconFlow (DeepSeek)'] = parsedLegacy;
+                localStorage.setItem('wand_provider_models', JSON.stringify(providerModels));
+            }
+        } catch (e) {
+            console.error('Failed to migrate legacy models', e);
+        }
+    }
+    
+    return providerModels[settings.provider] || [];
+  });
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -48,19 +248,104 @@ const ChatInterface: React.FC = () => {
   }, [messages]);
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem('wand_ai_settings');
-    if (savedSettings) {
-      setSettings(JSON.parse(savedSettings));
-    }
-  }, []);
+    localStorage.setItem('wand_ai_settings', JSON.stringify(settings));
+  }, [settings]);
 
   const handleSaveSettings = () => {
-    localStorage.setItem('wand_ai_settings', JSON.stringify(settings));
     setShowSettings(false);
   };
 
+  const handleResetSettings = () => {
+    if (confirm('确定要重置所有设置吗？这将清除 API Key 和自定义模型配置。')) {
+      localStorage.removeItem('wand_ai_settings');
+      localStorage.removeItem('wand_available_models');
+      localStorage.removeItem('wand_provider_models');
+      // Force reload to reset state
+      window.location.reload();
+    }
+  };
+
+  const handleProviderChange = (newProvider: string) => {
+    // Save current settings to providerConfigs
+    const currentConfig: ProviderConfig = {
+      apiKey: settings.apiKey,
+      highSpeedTextModel: settings.highSpeedTextModel,
+      standardTextModel: settings.standardTextModel,
+      longContextModel: settings.longContextModel,
+      highSpeedMultimodalModel: settings.highSpeedMultimodalModel,
+      standardMultimodalModel: settings.standardMultimodalModel,
+      embeddingModel: settings.embeddingModel,
+      rerankModel: settings.rerankModel,
+      baseUrl: settings.baseUrl,
+      model: settings.model,
+      temperature: settings.temperature
+    };
+
+    const updatedConfigs = {
+      ...settings.providerConfigs,
+      [settings.provider]: currentConfig
+    };
+
+    // Load new provider settings
+    const newConfig = updatedConfigs[newProvider] || {
+      apiKey: '',
+      highSpeedTextModel: '',
+      standardTextModel: '',
+      longContextModel: '',
+      highSpeedMultimodalModel: '',
+      standardMultimodalModel: '',
+      embeddingModel: '',
+      rerankModel: '',
+      baseUrl: '',
+      model: '自定义模型',
+      temperature: 0.3
+    };
+
+    setSettings({
+      ...settings,
+      provider: newProvider,
+      providerConfigs: updatedConfigs,
+      ...newConfig
+    });
+
+    // Update available models for the new provider
+    const allModels = JSON.parse(localStorage.getItem('wand_provider_models') || '{}');
+    setAvailableModels(allModels[newProvider] || []);
+  };
+
+  const handleFetchModels = async () => {
+    if (settings.provider !== 'SiliconFlow (DeepSeek)') {
+      alert('当前服务商不支持自动获取模型列表，请手动填写模型名称。');
+      return;
+    }
+
+    if (!settings.apiKey) {
+      alert('Please enter an API Key first.');
+      return;
+    }
+    setIsFetchingModels(true);
+    try {
+      const models = await window.api.fetchModels(settings);
+      setAvailableModels(models);
+      
+      const allModels = JSON.parse(localStorage.getItem('wand_provider_models') || '{}');
+      allModels[settings.provider] = models;
+      localStorage.setItem('wand_provider_models', JSON.stringify(allModels));
+    } catch (error) {
+      console.error('Failed to fetch models:', error);
+      alert('Failed to fetch models: ' + error);
+    } finally {
+      setIsFetchingModels(false);
+    }
+  };
+
+  const handleStop = () => {
+    window.api.chatStop();
+    setIsLoading(false);
+  };
+
   const handleSend = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() && attachedFiles.length === 0) return;
 
     const newMessage: Message = {
       id: Date.now().toString(),
@@ -71,6 +356,11 @@ const ChatInterface: React.FC = () => {
 
     setMessages(prev => [...prev, newMessage]);
     setInput('');
+    const currentAttachedFiles = [...attachedFiles];
+    setAttachedFiles([]); // Clear attachments after sending
+
+    // Determine which model to use
+    const effectiveModelId = settings.standardTextModel || settings.highSpeedTextModel || settings.longContextModel || 'gpt-3.5-turbo';
 
     // Create a placeholder for the AI response
     const aiResponseId = (Date.now() + 1).toString();
@@ -78,15 +368,23 @@ const ChatInterface: React.FC = () => {
       id: aiResponseId,
       role: 'assistant',
       content: '',
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      model: effectiveModelId
     };
     setMessages(prev => [...prev, aiResponse]);
 
     try {
+      setIsLoading(true);
       // Call the AI service via IPC with streaming
+      const config = { 
+        ...settings, 
+        customModelId: effectiveModelId, 
+        workspacePath,
+        files: currentAttachedFiles.map(f => f.path) // Pass attached files
+      };
       window.api.chatStream(
         input, 
-        settings,
+        config,
         (chunk: string) => {
           setMessages(prev => prev.map(msg => 
             msg.id === aiResponseId 
@@ -96,9 +394,11 @@ const ChatInterface: React.FC = () => {
         },
         () => {
           console.log('Stream finished');
+          setIsLoading(false);
         },
         (error: string) => {
           console.error('Stream error:', error);
+          setIsLoading(false);
           setMessages(prev => prev.map(msg => 
             msg.id === aiResponseId 
               ? { ...msg, content: msg.content + `\n[Error: ${error}]` }
@@ -111,6 +411,63 @@ const ChatInterface: React.FC = () => {
     }
   };
 
+  const handleFileSelect = async () => {
+    try {
+      const result = await window.api.showOpenDialog();
+      if (!result.canceled && result.filePaths.length > 0) {
+        const newFiles = result.filePaths.map((path: string) => ({
+          path,
+          name: path.split(/[\\/]/).pop() || path
+        }));
+        setAttachedFiles(prev => [...prev, ...newFiles]);
+      }
+    } catch (error) {
+      console.error('Failed to select file:', error);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Try to get file from custom drag data (from FileExplorer)
+    const wandFileData = e.dataTransfer.getData('application/wand-file');
+    if (wandFileData) {
+      try {
+        const node = JSON.parse(wandFileData);
+        if (!attachedFiles.some(f => f.path === node.path)) {
+          setAttachedFiles(prev => [...prev, { path: node.path, name: node.name }]);
+        }
+        return;
+      } catch (e) {
+        console.error('Failed to parse wand file data', e);
+      }
+    }
+
+    // Fallback to standard file drop (from OS)
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const newFiles: AttachedFile[] = [];
+      for (let i = 0; i < e.dataTransfer.files.length; i++) {
+        const file = e.dataTransfer.files[i];
+        // Note: 'path' property on File object is available in Electron renderer
+        const path = (file as any).path; 
+        if (path && !attachedFiles.some(f => f.path === path)) {
+          newFiles.push({ path, name: file.name, size: file.size });
+        }
+      }
+      setAttachedFiles(prev => [...prev, ...newFiles]);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const removeAttachedFile = (index: number) => {
+    setAttachedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -119,22 +476,14 @@ const ChatInterface: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full relative bg-[#1e1e1e]">
+    <div 
+      className="flex flex-col h-full relative bg-[#1e1e1e]"
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+    >
       {/* Header */}
       <div className="p-4 border-b border-[#2b2b2b] flex justify-between items-center bg-[#252526]">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-purple-600/20 flex items-center justify-center text-purple-400">
-            <Sparkles size={18} />
-          </div>
-          <div className="flex flex-col">
-            <span className="font-medium text-sm text-white">{settings.model === '自定义模型' ? 'Custom Model' : settings.model}</span>
-            <div className="flex gap-1 mt-0.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
-              <div className="w-1.5 h-1.5 rounded-full bg-purple-500/50" />
-              <div className="w-1.5 h-1.5 rounded-full bg-purple-500/20" />
-            </div>
-          </div>
-        </div>
+        <span className="font-medium text-sm text-white">Wand Assistant</span>
         <button 
           onClick={() => setShowSettings(true)}
           className="p-1.5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition-colors"
@@ -152,12 +501,22 @@ const ChatInterface: React.FC = () => {
               <Settings size={18} />
               <span className="font-medium">AI 对话设置</span>
             </div>
-            <button 
-              onClick={handleSaveSettings}
-              className="text-sm text-gray-400 hover:text-white"
-            >
-              关闭
-            </button>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={handleResetSettings}
+                className="text-sm text-red-400 hover:text-red-300 flex items-center gap-1"
+                title="重置设置"
+              >
+                <RotateCcw size={14} />
+                <span>重置</span>
+              </button>
+              <button 
+                onClick={handleSaveSettings}
+                className="text-sm text-gray-400 hover:text-white"
+              >
+                关闭
+              </button>
+            </div>
           </div>
 
           <div className="space-y-4 text-sm">
@@ -171,9 +530,10 @@ const ChatInterface: React.FC = () => {
               <select 
                 className="w-full bg-[#2b2b2b] border border-[#3e3e3e] rounded p-2 text-white focus:outline-none focus:border-primary"
                 value={settings.provider}
-                onChange={(e) => setSettings({...settings, provider: e.target.value})}
+                onChange={(e) => handleProviderChange(e.target.value)}
               >
-                <option>DeepSeek - DeepSeek 系列模型</option>
+                <option>SiliconFlow (DeepSeek)</option>
+                <option>Aliyun Bailian (百炼)</option>
                 <option>OpenAI</option>
                 <option>Custom</option>
               </select>
@@ -190,28 +550,63 @@ const ChatInterface: React.FC = () => {
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-gray-400 block">模型</label>
-              <select 
-                className="w-full bg-[#2b2b2b] border border-[#3e3e3e] rounded p-2 text-white focus:outline-none focus:border-primary"
-                value={settings.model}
-                onChange={(e) => setSettings({...settings, model: e.target.value})}
-              >
-                <option>自定义模型</option>
-                <option>gpt-3.5-turbo</option>
-                <option>gpt-4</option>
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-gray-400 block">自定义模型 ID</label>
-              <input 
-                type="text" 
-                className="w-full bg-[#2b2b2b] border border-[#3e3e3e] rounded p-2 text-white focus:outline-none focus:border-primary"
-                value={settings.customModelId}
-                onChange={(e) => setSettings({...settings, customModelId: e.target.value})}
-                placeholder="e.g. deepseek-chat"
-              />
+            <div className="space-y-3 border-t border-[#3e3e3e] pt-3 mt-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-gray-300">Model Configuration</span>
+                <button 
+                  onClick={handleFetchModels}
+                  disabled={isFetchingModels}
+                  className="p-1.5 bg-[#2b2b2b] border border-[#3e3e3e] rounded hover:bg-[#3e3e3e] text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                  title="Refresh Models"
+                >
+                  <RefreshCw size={14} className={isFetchingModels ? 'animate-spin' : ''} />
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-1 gap-3">
+                <ModelSelect 
+                  label="高速文本模型 (High-speed Text)" 
+                  value={settings.highSpeedTextModel} 
+                  onChange={(v) => setSettings({...settings, highSpeedTextModel: v})} 
+                  options={availableModels}
+                />
+                <ModelSelect 
+                  label="标准文本模型 (Standard Text)" 
+                  value={settings.standardTextModel} 
+                  onChange={(v) => setSettings({...settings, standardTextModel: v})} 
+                  options={availableModels}
+                />
+                <ModelSelect 
+                  label="长文本模型 (Long Context)" 
+                  value={settings.longContextModel} 
+                  onChange={(v) => setSettings({...settings, longContextModel: v})} 
+                  options={availableModels}
+                />
+                <ModelSelect 
+                  label="高速多模态模型 (High-speed Multimodal)" 
+                  value={settings.highSpeedMultimodalModel} 
+                  onChange={(v) => setSettings({...settings, highSpeedMultimodalModel: v})} 
+                  options={availableModels}
+                />
+                <ModelSelect 
+                  label="标准多模态模型 (Standard Multimodal)" 
+                  value={settings.standardMultimodalModel} 
+                  onChange={(v) => setSettings({...settings, standardMultimodalModel: v})} 
+                  options={availableModels}
+                />
+                <ModelSelect 
+                  label="Embedding 模型" 
+                  value={settings.embeddingModel} 
+                  onChange={(v) => setSettings({...settings, embeddingModel: v})} 
+                  options={availableModels}
+                />
+                <ModelSelect 
+                  label="Rerank 模型" 
+                  value={settings.rerankModel} 
+                  onChange={(v) => setSettings({...settings, rerankModel: v})} 
+                  options={availableModels}
+                />
+              </div>
             </div>
 
             <div className="space-y-1">
@@ -246,24 +641,61 @@ const ChatInterface: React.FC = () => {
 
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {messages.map((msg) => (
+        {messages.map((msg, index) => (
           <div key={msg.id} className={`flex gap-3 ${msg.role === 'assistant' ? '' : 'flex-row-reverse'}`}>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-              msg.role === 'assistant' ? 'bg-primary' : 'bg-gray-600'
+              msg.role === 'assistant' ? 'bg-transparent' : 'bg-gray-600'
             }`}>
-              {msg.role === 'assistant' ? <Bot size={16} /> : <User size={16} />}
+              {msg.role === 'assistant' ? <Sparkles size={20} className="text-purple-400" /> : <User size={16} />}
             </div>
             <div className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+              {msg.role === 'assistant' && (
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-bold text-sm text-white">Wand AI</span>
+                  <span className="text-xs text-gray-500">
+                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              )}
+              
               <div className={`px-4 py-2 rounded-lg text-sm ${
                 msg.role === 'assistant' 
-                  ? 'bg-accent text-foreground' 
+                  ? `text-gray-300 pl-0 pt-0 prose prose-invert max-w-none prose-p:my-1 prose-pre:bg-[#2b2b2b] prose-pre:p-2 prose-pre:rounded ${isLoading && index === messages.length - 1 ? 'streaming-active' : ''}`
                   : 'bg-primary text-white'
               }`}>
-                {msg.content}
+                {msg.role === 'assistant' ? (
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm]} 
+                    rehypePlugins={[rehypeRaw]}
+                    components={{
+                      code({node, inline, className, children, ...props}: any) {
+                        const match = /language-(\w+)/.exec(className || '')
+                        return !inline && match ? (
+                          <div className="relative group">
+                            <code className={className} {...props}>
+                              {children}
+                            </code>
+                          </div>
+                        ) : (
+                          <code className={`${className} bg-white/10 rounded px-1 py-0.5`} {...props}>
+                            {children}
+                          </code>
+                        )
+                      }
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
+                ) : (
+                  msg.content
+                )}
               </div>
-              <span className="text-[10px] text-gray-500 mt-1">
-                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
+              
+              {msg.role === 'user' && (
+                <span className="text-[10px] text-gray-500 mt-1">
+                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
             </div>
           </div>
         ))}
@@ -272,6 +704,21 @@ const ChatInterface: React.FC = () => {
 
       {/* Input Area */}
       <div className="p-4 border-t border-accent bg-secondary/30">
+        {attachedFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {attachedFiles.map((file, index) => (
+              <div key={index} className="flex items-center gap-2 bg-[#2b2b2b] border border-[#3e3e3e] rounded-md px-2 py-1 text-xs text-gray-300">
+                <span className="truncate max-w-[150px]" title={file.path}>{file.name}</span>
+                <button 
+                  onClick={() => removeAttachedFile(index)}
+                  className="hover:text-white"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="relative bg-accent/50 rounded-lg border border-accent focus-within:border-primary/50 transition-colors">
           <textarea
             value={input}
@@ -281,14 +728,18 @@ const ChatInterface: React.FC = () => {
             className="w-full bg-transparent border-none p-3 pr-12 text-sm focus:ring-0 resize-none h-[80px] scrollbar-hide"
           />
           <div className="absolute bottom-2 right-2 flex gap-1">
-            <button className="p-1.5 text-gray-400 hover:text-white rounded-md hover:bg-white/10">
+            <button 
+              onClick={handleFileSelect}
+              className="p-1.5 text-gray-400 hover:text-white rounded-md hover:bg-white/10"
+              title="Attach files"
+            >
               <Paperclip size={16} />
             </button>
             <button 
-              onClick={handleSend}
-              className="p-1.5 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
+              onClick={isLoading ? handleStop : handleSend}
+              className={`p-1.5 rounded-md transition-colors ${isLoading ? 'bg-red-500 hover:bg-red-600' : 'bg-primary hover:bg-primary/90'} text-white`}
             >
-              <Send size={16} />
+              {isLoading ? <Square size={16} fill="currentColor" /> : <Send size={16} />}
             </button>
           </div>
         </div>

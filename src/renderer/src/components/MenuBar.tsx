@@ -86,9 +86,9 @@ const MenuBar: React.FC<MenuBarProps> = ({
     <div className="h-[35px] bg-[#1e1e1e] flex items-center px-2 text-[13px] select-none border-b border-[#2b2b2b] w-full justify-between" ref={menuRef} style={{ WebkitAppRegion: 'drag' } as any}>
       
       {/* Left Section: Icon, Menus, Nav */}
-      <div className="flex items-center h-full flex-shrink-0" style={{ WebkitAppRegion: 'no-drag' } as any}>
+      <div className="flex items-center h-full flex-shrink-0">
         {/* App Icon / Sidebar Toggle */}
-        <div className="mr-3 ml-1 text-gray-400 hover:text-white cursor-pointer">
+        <div className="mr-3 ml-1 text-gray-400 hover:text-white cursor-pointer" style={{ WebkitAppRegion: 'no-drag' } as any}>
            <LayoutPanelLeft size={16} />
         </div>
 
@@ -99,12 +99,13 @@ const MenuBar: React.FC<MenuBarProps> = ({
               className={`px-2 h-[24px] mx-[1px] flex items-center rounded hover:bg-[#353535] cursor-default ${activeMenu === menu.id ? 'bg-[#353535]' : ''}`}
               onClick={() => handleMenuClick(menu.id)}
               onMouseEnter={() => handleMouseEnter(menu.id)}
+              style={{ WebkitAppRegion: 'no-drag' } as any}
             >
               <span className="text-[#cccccc]">{menu.label}</span>
             </div>
             
             {activeMenu === menu.id && (
-              <div className="absolute top-[30px] left-0 min-w-[250px] bg-[#252526] shadow-xl border border-[#454545] rounded-md py-1 z-50 text-[#cccccc]">
+              <div className="absolute top-[30px] left-0 min-w-[250px] bg-[#252526] shadow-xl border border-[#454545] rounded-md py-1 z-50 text-[#cccccc]" style={{ WebkitAppRegion: 'no-drag' } as any}>
                 {renderMenuContent(menu.id)}
               </div>
             )}
@@ -117,12 +118,13 @@ const MenuBar: React.FC<MenuBarProps> = ({
             className={`px-1 h-[24px] mx-[1px] flex items-center rounded hover:bg-[#353535] cursor-default ${activeMenu === 'more' ? 'bg-[#353535]' : ''}`}
             onClick={() => handleMenuClick('more')}
             onMouseEnter={() => handleMouseEnter('more')}
+            style={{ WebkitAppRegion: 'no-drag' } as any}
           >
             <MoreHorizontal size={16} className="text-[#cccccc]" />
           </div>
           
           {activeMenu === 'more' && (
-            <div className="absolute top-[30px] left-0 min-w-[200px] bg-[#252526] shadow-xl border border-[#454545] rounded-md py-1 z-50 text-[#cccccc]">
+            <div className="absolute top-[30px] left-0 min-w-[200px] bg-[#252526] shadow-xl border border-[#454545] rounded-md py-1 z-50 text-[#cccccc]" style={{ WebkitAppRegion: 'no-drag' } as any}>
               {hiddenMenus.map(menu => (
                 <MenuItem 
                   key={menu.id} 
@@ -138,7 +140,7 @@ const MenuBar: React.FC<MenuBarProps> = ({
         </div>
 
         {/* Navigation Arrows */}
-        <div className="flex items-center ml-2 space-x-1 text-gray-500">
+        <div className="flex items-center ml-2 space-x-1 text-gray-500" style={{ WebkitAppRegion: 'no-drag' } as any}>
           <div className="p-1 hover:bg-[#353535] rounded cursor-pointer hover:text-gray-300">
             <ArrowLeft size={14} />
           </div>
@@ -149,8 +151,8 @@ const MenuBar: React.FC<MenuBarProps> = ({
       </div>
       
       {/* Center Section: Search Box */}
-      <div className="flex-1 flex justify-center items-center px-4" style={{ WebkitAppRegion: 'no-drag' } as any}>
-        <div className="w-full max-w-[600px] h-[24px] bg-[#2b2b2b] border border-[#3e3e3e] rounded-md flex items-center px-2 text-gray-400 hover:bg-[#333333] hover:border-[#4e4e4e] transition-colors cursor-pointer group">
+      <div className="flex-1 flex justify-center items-center px-4">
+        <div className="w-full max-w-[600px] h-[24px] bg-[#2b2b2b] border border-[#3e3e3e] rounded-md flex items-center px-2 text-gray-400 hover:bg-[#333333] hover:border-[#4e4e4e] transition-colors cursor-pointer group" style={{ WebkitAppRegion: 'no-drag' } as any}>
           <Search size={13} className="mr-2 group-hover:text-gray-300" />
           <span className="text-xs group-hover:text-gray-300">Wand</span>
         </div>

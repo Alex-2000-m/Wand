@@ -34,3 +34,131 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #444;
 }
+
+/* Details/Summary Styling for AI Analysis Steps */
+.prose details {
+  border: none;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  background-color: transparent;
+  overflow: hidden;
+  transition: background-color 0.2s;
+}
+
+.prose details[open] {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+/* Details/Summary Styling for AI Analysis Steps */
+.prose details {
+  border: none !important;
+  border-radius: 4px;
+  margin-bottom: 4px !important;
+  background-color: transparent !important;
+  overflow: hidden;
+}
+
+.prose details[open] {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+.prose details > summary {
+  list-style: none !important;
+  padding: 6px 8px !important;
+  cursor: pointer;
+  font-weight: 500;
+  display: flex !important;
+  align-items: center !important;
+  transition: all 0.2s;
+  color: #9ca3af;
+  font-size: 0.85rem;
+  user-select: none;
+  border-radius: 4px;
+}
+
+.prose details > summary::-webkit-details-marker {
+  display: none !important;
+}
+
+.prose details > summary:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: #e5e7eb;
+}
+
+/* Icon Container - Using CSS Borders for Checkmark (No Image) */
+.prose details > summary::before {
+  content: '';
+  display: inline-block !important;
+  
+  /* Checkmark Shape Dimensions */
+  width: 6px !important;
+  height: 11px !important;
+  
+  /* Checkmark Style (Green L-shape rotated) */
+  border: solid #4ade80 !important;
+  border-width: 0 2px 2px 0 !important;
+  transform: rotate(45deg);
+  
+  /* Positioning adjustments for the rotated shape */
+  margin-right: 14px !important;
+  margin-left: 4px !important;
+  margin-bottom: 3px !important;
+  
+  /* Ensure no other styles interfere */
+  background: transparent !important;
+  border-radius: 0 !important;
+  animation: none !important;
+  flex-shrink: 0 !important;
+}
+
+/* Spinner Animation */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Spinner (Loading State - Active Step) */
+/* Override the checkmark styles completely to create a circle spinner */
+.streaming-active > details:last-child > summary::before,
+.streaming-active > :last-child > details > summary::before {
+  /* Spinner Dimensions */
+  width: 14px !important;
+  height: 14px !important;
+  
+  /* Spinner Style (Circle with colored top/right) */
+  border: 2px solid rgba(255, 255, 255, 0.1) !important;
+  border-top-color: #e5e7eb !important;
+  border-right-color: #e5e7eb !important;
+  border-radius: 50% !important;
+  
+  /* Reset Checkmark positioning */
+  margin-right: 8px !important;
+  margin-left: 0 !important;
+  margin-bottom: 0 !important;
+  
+  /* Apply Animation (overrides transform) */
+  animation: spin 0.8s linear infinite !important;
+}
+
+/* Utility to remove icon from specific details */
+.prose details.no-icon > summary::before {
+  display: none !important;
+}
+
+.prose details.no-icon > summary {
+  padding-left: 8px !important;
+}
+
+/* Content Styling */
+.prose details[open] > summary {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.prose details > div, 
+.prose details > p {
+  padding: 8px 12px 8px 34px !important; /* Indent content to align with text */
+  margin: 0 !important;
+  font-size: 0.85em;
+  color: #a1a1aa;
+  background-color: transparent !important;
+}

@@ -9,7 +9,6 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
   const navItems = [
     { id: 'projects', icon: Files, label: 'Projects' },
-    { id: 'chat', icon: MessageSquare, label: 'AI Chat' },
   ];
 
   return (

@@ -108,12 +108,20 @@ const FileTreeItem: React.FC<{
     }
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('text/plain', node.path);
+    e.dataTransfer.setData('application/wand-file', JSON.stringify(node));
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+
   return (
     <div>
       <div 
         className={`flex items-center py-[3px] hover:bg-[#2a2d2e] cursor-pointer text-[13px] text-[#cccccc] select-none group`}
         style={{ paddingLeft: `${level * 12 + 10}px` }}
         onClick={handleToggle}
+        draggable={!node.isDirectory}
+        onDragStart={handleDragStart}
       >
         <span className={`mr-1 ${node.isDirectory ? 'text-[#cccccc]' : 'opacity-0'}`}>
           {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}

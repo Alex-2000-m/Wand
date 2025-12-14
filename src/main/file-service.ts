@@ -38,6 +38,12 @@ export class FileService {
       return filePath;
     });
 
+    ipcMain.handle('dialog:showOpenDialog', async () => {
+      return await dialog.showOpenDialog({
+        properties: ['openFile', 'multiSelections']
+      });
+    });
+
     ipcMain.handle('fs:saveFile', async (_, filePath: string, content: string) => {
       try {
         await fs.writeFile(filePath, content, 'utf-8');
