@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { Send, Paperclip, Mic, Bot, User, Settings, X, Sparkles, RefreshCw, ChevronDown, ChevronRight, Check, RotateCcw, Square, Terminal, Code2, Plus } from 'lucide-react';
+import { Send, Paperclip, Mic, Bot, User, Settings, X, Sparkles, RefreshCw, ChevronDown, ChevronRight, Check, RotateCcw, Square, Terminal, Code2, Plus, Save, Loader2, Bug } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -171,8 +171,70 @@ const ToolCallBlock = ({ content }: { content: string }) => {
   );
 };
 
-const ToolResultBlock = ({ content }: { content: string }) => {
+const ToolResultBlock = ({ content, onSaveTool }: { content: string, onSaveTool?: (name: string, code: string, description: string) => void }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  
+  // Check if content is a temporary tool creation result
+  let toolData = null;
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed.status === "temporary_tool_created") {
+      toolData = parsed;
+    }
+  } catch (e) {
+    // Not JSON or not our specific JSON
+  }
+
+  if (toolData) {
+    return (
+      <div className="my-2 border border-purple-500/30 bg-purple-500/10 rounded-md overflow-hidden">
+        <div className="w-full bg-purple-500/20 px-3 py-2 flex items-center justify-between border-b border-purple-500/20">
+          <button 
+            onClick={() => setIsOpen(!isOpen)}
+            className="flex items-center gap-2 text-purple-300 text-xs font-mono hover:text-purple-200 transition-colors flex-1 text-left"
+          >
+            {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            <Code2 size={14} />
+            <span>New Tool: {toolData.name}</span>
+          </button>
+          
+          <div className="flex items-center gap-2">
+             <span className="text-[10px] bg-purple-500/20 px-1.5 py-0.5 rounded text-purple-200 border border-purple-500/30">Temp</span>
+             <button 
+                onClick={async (e) => {
+                    e.stopPropagation();
+                    if (onSaveTool && !isSaved) {
+                        await onSaveTool(toolData.name, toolData.code, toolData.description);
+                        setIsSaved(true);
+                    }
+                }}
+                disabled={isSaved}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] transition-colors shadow-sm ${
+                  isSaved 
+                    ? "bg-green-600 text-white cursor-default" 
+                    : "bg-purple-600 hover:bg-purple-500 text-white"
+                }`}
+                title={isSaved ? "Tool saved" : "Save this tool permanently"}
+              >
+                {isSaved ? <Check size={10} /> : <Save size={10} />}
+                {isSaved ? "Saved" : "Save"}
+              </button>
+          </div>
+        </div>
+        
+        {isOpen && (
+          <div className="p-3 text-xs font-mono text-gray-300">
+            <div className="mb-2 text-gray-400 italic">{toolData.description}</div>
+            <div className="bg-[#1e1e1e] p-2 rounded border border-gray-700 overflow-x-auto">
+              <pre className="text-blue-300">{toolData.usage}</pre>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="my-2 border border-green-500/30 bg-green-500/10 rounded-md overflow-hidden">
       <button 
@@ -192,36 +254,77 @@ const ToolResultBlock = ({ content }: { content: string }) => {
   );
 };
 
-const ThinkingBlock = ({ content }: { content: string }) => {
-  const [isOpen, setIsOpen] = useState(true);
+const ThinkingBlock = ({ content, subtitle, isFinished }: { content: string, subtitle?: string, isFinished: boolean }) => {
+  const [isOpen, setIsOpen] = useState(!isFinished);
+
+  useEffect(() => {
+    if (isFinished) {
+      setIsOpen(false);
+    }
+  }, [isFinished]);
+
   return (
     <div className="my-2 border border-gray-700 rounded-md overflow-hidden">
       <button 
         onClick={() => setIsOpen(!isOpen)}
         className="w-full bg-[#2b2b2b] px-3 py-2 flex items-center gap-2 text-gray-400 text-xs hover:bg-[#3e3e3e] transition-colors"
+        title={isFinished ? "Finished" : "Thinking..."}
       >
         {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        <span>Thinking Process</span>
+        {isFinished ? (
+            <Check size={14} className="text-green-500" />
+        ) : (
+            <Loader2 size={14} className="animate-spin text-blue-400" />
+        )}
+        <span>{subtitle || "思考过程"}</span>
       </button>
       {isOpen && (
-        <div className="p-3 text-gray-400 text-sm bg-[#1e1e1e] border-t border-gray-700 italic">
-          <ReactMarkdown>{content}</ReactMarkdown>
+        <div className="p-3 text-gray-400 text-sm bg-[#1e1e1e] border-t border-gray-700">
+          <ReactMarkdown
+            components={{
+              ul: ({node, children, ...props}) => <ul className="pl-0 space-y-2 my-2" {...props}>{children}</ul>,
+              ol: ({node, children, ...props}) => <ol className="pl-0 space-y-2 my-2" {...props}>{children}</ol>,
+              li: ({node, children, ...props}) => (
+                <li className="flex items-center gap-2 list-none bg-[#2b2b2b]/50 px-2 py-1.5 rounded border border-gray-700/50">
+                  <span className="shrink-0 text-green-500 bg-green-500/10 p-0.5 rounded-full">
+                    <Check size={10} />
+                  </span>
+                  <span className="flex-1 font-medium text-gray-300 text-xs">{children}</span>
+                </li>
+              ),
+              p: ({node, children, ...props}) => <p className="mb-2 last:mb-0" {...props}>{children}</p>
+            }}
+          >
+            {content}
+          </ReactMarkdown>
         </div>
       )}
     </div>
   );
 };
 
-const MessageContent = ({ content }: { content: string }) => {
-  // Split content by tags
-  const parts = content.split(/(<thinking>[\s\S]*?<\/thinking>|<tool>[\s\S]*?<\/tool>|<tool_result>[\s\S]*?<\/tool_result>)/g);
+const MessageContent = ({ content, onSaveTool }: { content: string, onSaveTool?: (name: string, code: string, description: string) => void }) => {
+  // Split content by tags. We use a more permissive regex for the subtitle to ensure we capture it even if there are newlines or spaces.
+  const parts = content.split(/(<thinking>[\s\S]*?<\/thinking>(?:[\s\S]*?<subtitle>[\s\S]*?<\/subtitle>)?|<tool>[\s\S]*?<\/tool>|<tool_result>[\s\S]*?<\/tool_result>)/g);
 
   return (
     <div className="space-y-2">
       {parts.map((part, index) => {
         if (part.startsWith('<thinking>')) {
-          const inner = part.replace(/<\/?thinking>/g, '');
-          return <ThinkingBlock key={index} content={inner} />;
+          const subtitleMatch = part.match(/<subtitle>([\s\S]*?)<\/subtitle>/);
+          const subtitle = subtitleMatch ? subtitleMatch[1].trim() : undefined;
+          // Check for closing tag to determine if finished
+          const isFinished = part.includes('</thinking>');
+          
+          // Remove tags to get inner content
+          let inner = part.replace(/<\/?thinking>/g, '');
+          if (subtitleMatch) {
+             inner = inner.replace(subtitleMatch[0], '');
+          }
+          // Also clean up any leading/trailing whitespace that might have been captured between tags
+          inner = inner.trim();
+
+          return <ThinkingBlock key={index} content={inner} subtitle={subtitle} isFinished={isFinished} />;
         }
         if (part.startsWith('<tool>')) {
           const inner = part.replace(/<\/?tool>/g, '');
@@ -229,7 +332,7 @@ const MessageContent = ({ content }: { content: string }) => {
         }
         if (part.startsWith('<tool_result>')) {
           const inner = part.replace(/<\/?tool_result>/g, '');
-          return <ToolResultBlock key={index} content={inner} />;
+          return <ToolResultBlock key={index} content={inner} onSaveTool={onSaveTool} />;
         }
         if (!part.trim()) return null;
         
@@ -276,6 +379,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ workspacePath }) => {
     }
   ]);
   const [showSettings, setShowSettings] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
   const [settings, setSettings] = useState<AISettings>(() => {
     const saved = localStorage.getItem('wand_ai_settings');
     const defaultProviderConfig: ProviderConfig = {
@@ -483,6 +587,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ workspacePath }) => {
     setAttachedFiles([]);
     setIsLoading(false);
     window.api.chatStop(); // Stop any ongoing generation
+    window.api.clearTempTools().catch((err: any) => console.error("Failed to clear temp tools:", err));
   };
 
   const handleSend = async () => {
@@ -634,6 +739,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ workspacePath }) => {
         <span className="font-medium text-sm text-white">Wand Assistant</span>
         <div className="flex items-center gap-1">
           <button 
+            onClick={() => setShowDebug(true)}
+            className="p-1.5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition-colors"
+            title="Debug Messages"
+          >
+            <Bug size={16} />
+          </button>
+          <button 
             onClick={handleNewChat}
             className="p-1.5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition-colors"
             title="New Chat"
@@ -649,6 +761,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ workspacePath }) => {
           </button>
         </div>
       </div>
+
+      {/* Debug Modal */}
+      {showDebug && (
+        <div className="absolute inset-0 bg-[#1e1e1e] z-50 flex flex-col p-4 overflow-hidden">
+          <div className="flex justify-between items-center mb-4 flex-shrink-0">
+            <div className="flex items-center gap-2 text-yellow-500">
+              <Bug size={18} />
+              <span className="font-medium">Debug Messages</span>
+            </div>
+            <button 
+              onClick={() => setShowDebug(false)}
+              className="text-sm text-gray-400 hover:text-white"
+            >
+              关闭
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto bg-[#2b2b2b] p-4 rounded border border-[#3e3e3e] font-mono text-xs text-gray-300">
+            <pre>{JSON.stringify(messages, null, 2)}</pre>
+          </div>
+        </div>
+      )}
 
       {/* Settings Modal */}
       {showSettings && (
@@ -821,7 +954,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ workspacePath }) => {
                   : 'bg-primary text-white'
               }`}>
                 {msg.role === 'assistant' ? (
-                  <MessageContent content={msg.content} />
+                  <MessageContent 
+                    content={msg.content} 
+                    onSaveTool={async (name, code, desc) => {
+                      try {
+                        await window.api.saveTool(name, code, desc);
+                      } catch (error) {
+                        console.error("Failed to save tool:", error);
+                      }
+                    }}
+                  />
                 ) : (
                   msg.content
                 )}

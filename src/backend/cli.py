@@ -37,6 +37,19 @@ def main():
         api_key = config.get('apiKey')
         base_url = config.get('baseUrl')
 
+        if command_type == 'clear_temp_tools':
+            from tools import clear_temporary_tools
+            result = clear_temporary_tools()
+            print(json.dumps({'status': 'success', 'message': result}))
+            return
+
+        if command_type == 'save_tool':
+            from tools import save_tool
+            tool_data = request_data.get('tool_data', {})
+            result = save_tool(tool_data.get('name'), tool_data.get('code'), tool_data.get('description'))
+            print(json.dumps({'status': 'success', 'message': result}))
+            return
+
         if command_type == 'get_tools':
             tools = get_tools_definitions()
             print(json.dumps({'tools': tools}))
@@ -86,7 +99,7 @@ def main():
                     if "<thinking>" in buffer:
                         pre, post = buffer.split("<thinking>", 1)
                         if pre: print_chunk(pre)
-                        print_chunk("<details><summary>思考过程</summary>\n<div style='color: #a1a1aa; font-style: italic;'>\n")
+                        print_chunk("<thinking>")
                         state = "THINKING"
                         buffer = post
                         continue
@@ -121,8 +134,7 @@ def main():
                     if "</thinking>" in buffer:
                         pre, post = buffer.split("</thinking>", 1)
                         if pre: print_chunk(pre)
-                        # Explicitly close the box and add spacing to separate from Action text
-                        print_chunk("</div>\n</details>\n\n")
+                        print_chunk("</thinking>")
                         state = "NORMAL"
                         buffer = post
                         continue
@@ -131,7 +143,7 @@ def main():
                     if "<action>" in buffer:
                         pre, post = buffer.split("<action>", 1)
                         if pre: print_chunk(pre)
-                        print_chunk("</div>\n</details>\n\n")
+                        print_chunk("</thinking>")
                         state = "ACTION"
                         buffer = post
                         continue

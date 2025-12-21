@@ -37,7 +37,9 @@ const api = {
   readDirectory: (path: string) => ipcRenderer.invoke('fs:readDirectory', path),
   readFile: (path: string) => ipcRenderer.invoke('fs:readFile', path),
   saveFile: (path: string, content: string) => ipcRenderer.invoke('fs:saveFile', path, content),
-  showOpenDialog: () => ipcRenderer.invoke('dialog:showOpenDialog')
+  showOpenDialog: () => ipcRenderer.invoke('dialog:showOpenDialog'),
+  clearTempTools: () => ipcRenderer.invoke('ai:clear-temp-tools'),
+  saveTool: (name: string, code: string, description: string) => ipcRenderer.invoke('ai:save-tool', name, code, description)
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

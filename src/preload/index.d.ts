@@ -6,7 +6,7 @@ declare global {
     api: {
       chat: (message: string, config?: any) => Promise<string>
       fetchModels: (config: any) => Promise<any>
-      chatStream: (message: string, config: any, onChunk: (chunk: string) => void, onDone: () => void, onError: (error: string) => void) => () => void
+      chatStream: (message: string, history: any[], config: any, onChunk: (chunk: string) => void, onDone: () => void, onError: (error: string) => void) => () => void
       chatStop: () => void
       openDirectory: () => Promise<string | null>
       openFile: () => Promise<string | null>
@@ -14,7 +14,9 @@ declare global {
       readDirectory: (path: string) => Promise<Array<{ name: string; isDirectory: boolean; path: string }>>
       readFile: (path: string) => Promise<string>
       saveFile: (path: string, content: string) => Promise<void>
-      showOpenDialog: () => Promise<string[] | null>
+      showOpenDialog: () => Promise<{ canceled: boolean; filePaths: string[] }>
+      clearTempTools: () => Promise<any>
+      saveTool: (name: string, code: string, description: string) => Promise<any>
     }
   }
 }

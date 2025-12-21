@@ -2,11 +2,28 @@ import os
 import json
 import inspect
 import hashlib
+import re
 from datetime import datetime
+from api_client import chat_completion
 
 # --- Registry ---
 
 TOOLS = {}
+LLM_CONFIG = {}
+TOOLS_TMP_FILE = os.path.join(os.path.dirname(__file__), 'tools_tmp.py')
+
+def set_llm_config(config):
+    global LLM_CONFIG
+    LLM_CONFIG = config
+
+def clear_temporary_tools():
+    """Clears the temporary tools file."""
+    try:
+        with open(TOOLS_TMP_FILE, 'w', encoding='utf-8') as f:
+            f.write("from tools import register_tool\n\n# Temporary tools file. Cleared on new chat.\n")
+        return "Temporary tools cleared."
+    except Exception as e:
+        return f"Error clearing temporary tools: {str(e)}"
 
 def register_tool(func):
     """Decorator to register a function as a tool."""
@@ -131,11 +148,44 @@ def read_file(file_path: str) -> str:
         return f"Error reading file: {str(e)}"
 
 @register_tool
-def create_tool(name: str, code: str, description: str):
+def save_tool(name: str, code: str, description: str):
     """
-    Creates a new tool by saving the python code to the configuration file.
-    IMPORTANT: The `code` argument MUST contain a full Python function definition (starting with `def name(...):`). 
-    Do not pass raw statements. The function name in `code` must match the `name` argument.
+    Permanently saves a tool that was previously created in memory.
+    
+    Args:
+        name: The name of the tool function.
+        code: The full Python code of the tool.
+        description: The description of the tool.
+    """
+    target_file = os.path.join(os.path.dirname(__file__), 'tools_gen.py')
+    
+    # Ensure code has @register_tool decorator if missing
+    if "@register_tool" not in code:
+        code = "@register_tool\n" + code
+
+    # Explicitly set the docstring ONLY if not already present in the code
+    # We check for triple quotes as a heuristic for existing docstrings
+    has_docstring = '"""' in code or "'''" in code
+    if not has_docstring and f"{name}.__doc__ =" not in code:
+        code += f"\n{name}.__doc__ = {json.dumps(description)}"
+
+    # Format description as comments, handling multiple lines
+    commented_desc = "\n".join([f"# {line}" for line in description.split('\n')])
+
+    new_tool_code = f"\n\n# --- Tool: {name} ---\n"
+    new_tool_code += f"{commented_desc}\n"
+    new_tool_code += code + "\n"
+    
+    try:
+        with open(target_file, 'a', encoding='utf-8') as f:
+            f.write(new_tool_code)
+        return f"Tool '{name}' has been permanently saved to tools_gen.py."
+    except Exception as e:
+        return f"Error saving tool: {str(e)}"
+
+def _register_tool_memory(name: str, code: str, description: str):
+    """
+    Internal helper to register tool in memory AND tools_tmp.py, then return JSON for UI.
     """
     # Security check
     if "import os" in code and "remove" in code:
@@ -145,38 +195,144 @@ def create_tool(name: str, code: str, description: str):
     if f"def {name}" not in code:
         return f"Error: The code must define a function named '{name}'. Please wrap your logic in 'def {name}(...):'."
 
-    # Target file: tools_gen.py
-    target_file = os.path.join(os.path.dirname(__file__), 'tools_gen.py')
-    
     # Ensure code has @register_tool decorator if missing
     if "@register_tool" not in code:
         code = "@register_tool\n" + code
 
-    # Explicitly set the docstring to ensure it is available for get_tools_definitions
-    # This is appended after the function definition
-    code += f"\n{name}.__doc__ = {json.dumps(description)}"
-
-    new_tool_code = f"\n\n# --- Tool: {name} ---\n"
-    new_tool_code += f"# Description: {description}\n"
-    new_tool_code += code + "\n"
+    # Explicitly set the docstring ONLY if not already present
+    has_docstring = '"""' in code or "'''" in code
+    if not has_docstring and f"{name}.__doc__ =" not in code:
+        code += f"\n{name}.__doc__ = {json.dumps(description)}"
     
     try:
-        with open(target_file, 'a', encoding='utf-8') as f:
-            f.write(new_tool_code)
-            
-        # Try to load it into the current session
+        # 1. Execute in current globals to register it in memory (for immediate use)
+        exec(code, globals())
+        
+        # 2. Append to tools_tmp.py (for persistence across turns in same session)
         try:
-            # We need to execute the code in a context where register_tool is available.
-            # Since we are in tools.py, register_tool is defined here.
-            # But we are executing code that might depend on imports in tools_gen.py.
-            # For simplicity, we exec in the current globals, which has register_tool.
-            exec(code, globals())
-            return f"Tool {name} created and loaded successfully."
-        except Exception as exec_error:
-            return f"Tool {name} saved to file, but failed to load in current session: {str(exec_error)}"
+            # Ensure file exists with header if not
+            if not os.path.exists(TOOLS_TMP_FILE):
+                with open(TOOLS_TMP_FILE, 'w', encoding='utf-8') as f:
+                    f.write("from tools import register_tool\n\n# Temporary tools file. Cleared on new chat.\n")
+            
+            with open(TOOLS_TMP_FILE, 'a', encoding='utf-8') as f:
+                f.write(f"\n\n# --- Temp Tool: {name} ---\n{code}\n")
+        except Exception as file_err:
+            # If file write fails, we still return success for memory registration, but warn
+            print(f"Warning: Failed to write to tools_tmp.py: {file_err}")
+
+        # Get signature
+        func = TOOLS.get(name)
+        sig = "(...)"
+        if func:
+            try:
+                sig = str(inspect.signature(func))
+            except:
+                pass
+        
+        # Return JSON structure for the UI
+        result = {
+            "status": "temporary_tool_created",
+            "name": name,
+            "description": description,
+            "code": code,
+            "signature": sig,
+            "usage": f"{name}{sig}"
+        }
+        return json.dumps(result)
             
     except Exception as e:
-        return f"Error creating tool: {str(e)}"
+        return f"Error loading tool in memory: {str(e)}"
+
+@register_tool
+def create_tool(requirement: str):
+    """
+    Creates a new tool based on the given requirement description.
+    The tool is created in MEMORY only. To save it permanently, the user must confirm.
+    
+    Args:
+        requirement: A detailed description of what the tool should do.
+    """
+    if not LLM_CONFIG:
+        return "Error: LLM configuration not set. Cannot use Code Agent."
+
+    # 1. Construct Prompt for Code Agent
+    system_prompt = """You are an expert Python developer specializing in creating tools for an AI assistant.
+Your task is to write a Python function based on the user's requirement.
+
+Rules:
+1. The function must be generic and reusable.
+2. The function must be fully self-contained (import necessary modules inside the function).
+3. The function must have a clear docstring describing its purpose, arguments, and return value.
+4. The function name should be snake_case and descriptive.
+5. You must output the code inside a markdown code block: ```python ... ```
+6. You must also provide a short description and the function name.
+7. Do NOT use `print` for output; return the result.
+8. Handle errors gracefully and return error messages as strings if needed.
+9. Do NOT include the @register_tool decorator in your output; it will be added automatically.
+
+Output Format:
+Name: <function_name>
+Description: <short_description>
+Code:
+```python
+def function_name(...):
+    ...
+```
+"""
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Create a tool for this requirement: {requirement}"}
+    ]
+
+    # 2. Call LLM
+    try:
+        # Use the same model as the main LLM
+        model = LLM_CONFIG.get('model')
+        
+        response = chat_completion(
+            api_key=LLM_CONFIG.get('apiKey'),
+            base_url=LLM_CONFIG.get('baseUrl'),
+            model=model,
+            messages=messages
+        )
+    except Exception as e:
+        return f"Error calling Code Agent: {str(e)}"
+
+    # 3. Parse Response
+    name_match = re.search(r"Name:\s*(.+)", response)
+    desc_match = re.search(r"Description:\s*(.+)", response)
+    code_match = re.search(r"```python\s*(.*?)\s*```", response, re.DOTALL)
+
+    if not (name_match and desc_match and code_match):
+        # Fallback logic
+        if code_match:
+            code = code_match.group(1).strip()
+            def_match = re.search(r"def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(", code)
+            if def_match:
+                name = def_match.group(1)
+                # Try to extract docstring from code
+                docstring_match = re.search(r'"""(.*?)"""', code, re.DOTALL)
+                if docstring_match:
+                    description = docstring_match.group(1).strip()
+                else:
+                    description = requirement
+                return _register_tool_memory(name, code, description)
+        
+        return f"Error: Code Agent failed to generate valid output.\nResponse:\n{response}"
+
+    name = name_match.group(1).strip()
+    # Prefer the docstring from the code if available, as it is more detailed
+    code = code_match.group(1).strip()
+    docstring_match = re.search(r'"""(.*?)"""', code, re.DOTALL)
+    if docstring_match:
+        description = docstring_match.group(1).strip()
+    else:
+        description = desc_match.group(1).strip()
+
+    # 4. Register in Memory
+    return _register_tool_memory(name, code, description)
 
 @register_tool
 def list_files(directory_path: str) -> list:
@@ -194,3 +350,33 @@ try:
 except ImportError as e:
     # Ignore if tools_gen is empty or has issues initially
     pass
+
+# --- Import Temporary Tools ---
+try:
+    if os.path.exists(TOOLS_TMP_FILE):
+        # We use exec to load the file content into the current namespace
+        # This avoids module caching issues since we want the latest version
+        with open(TOOLS_TMP_FILE, 'r', encoding='utf-8') as f:
+            exec(f.read(), globals())
+except Exception as e:
+    # Ignore errors in temp tools to prevent crashing the main app
+    print(f"Warning: Failed to load tools_tmp.py: {e}")
+
+@register_tool
+def write_file(file_path, content):
+    """
+    Writes text content to a specified file path, creating the file if it doesn't exist or overwriting it if it does.
+
+    Args:
+        file_path (str): The path to the file where content will be written.
+        content (str): The text content to write to the file.
+
+    Returns:
+        str: Success message if writing is successful, or error message if an exception occurs.
+    """
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return f"Successfully wrote content to {file_path}"
+    except Exception as e:
+        return f"Error writing to file: {str(e)}"

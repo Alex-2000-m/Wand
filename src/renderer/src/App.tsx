@@ -342,7 +342,7 @@ function App() {
                   <div className="flex-1 overflow-hidden relative bg-[#252526]">
                     {activeFile ? (
                       <>
-                        {activeFile.path.toLowerCase().endsWith('.md') && (
+                        {(activeFile.path.toLowerCase().endsWith('.md') || activeFile.path.toLowerCase().endsWith('.html')) && (
                           <div className="absolute top-2 right-4 z-10 flex bg-[#2b2b2b] rounded-md border border-[#3e3e3e] p-1">
                             <button
                               onClick={() => setViewMode('preview')}
@@ -370,6 +370,15 @@ function App() {
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {activeFile.content}
                             </ReactMarkdown>
+                          </div>
+                        ) : activeFile.path.toLowerCase().endsWith('.html') && viewMode === 'preview' ? (
+                          <div className="w-full h-full bg-white">
+                            <iframe 
+                              srcDoc={activeFile.content}
+                              className="w-full h-full border-none"
+                              title="HTML Preview"
+                              sandbox="allow-scripts"
+                            />
                           </div>
                         ) : (
                           <textarea 

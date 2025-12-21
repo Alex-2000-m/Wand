@@ -30,6 +30,66 @@ export class AIService {
     ipcMain.handle('ai:get-tools', async (event, config) => {
       return this.getTools(config);
     });
+
+    ipcMain.handle('ai:clear-temp-tools', async (event) => {
+      return this.clearTempTools();
+    });
+
+    ipcMain.handle('ai:save-tool', async (event, name, code, description) => {
+      return this.saveTool(name, code, description);
+    });
+  }
+
+  private saveTool(name: string, code: string, description: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const scriptPath = path.join(process.cwd(), 'src', 'backend', 'cli.py');
+      const pythonProcess = spawn('python', [scriptPath]);
+
+      const inputData = JSON.stringify({ 
+        type: 'save_tool', 
+        config: {}, 
+        tool_data: { name, code, description } 
+      });
+      pythonProcess.stdin.write(inputData);
+      pythonProcess.stdin.end();
+
+      let outputData = '';
+      pythonProcess.stdout.on('data', (data) => { outputData += data.toString(); });
+      
+      pythonProcess.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Python script exited with code ${code}`));
+        } else {
+          try {
+            resolve(JSON.parse(outputData));
+          } catch (e) {
+            reject(new Error(`Failed to parse output: ${outputData}`));
+          }
+        }
+      });
+    });
+  }
+
+  private clearTempTools(): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const scriptPath = path.join(process.cwd(), 'src', 'backend', 'cli.py');
+      const pythonProcess = spawn('python', [scriptPath]);
+
+      const inputData = JSON.stringify({ type: 'clear_temp_tools', config: {} });
+      pythonProcess.stdin.write(inputData);
+      pythonProcess.stdin.end();
+
+      let outputData = '';
+      pythonProcess.stdout.on('data', (data) => { outputData += data.toString(); });
+      
+      pythonProcess.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Python script exited with code ${code}`));
+        } else {
+          resolve(JSON.parse(outputData));
+        }
+      });
+    });
   }
 
   private getTools(config: any): Promise<any> {

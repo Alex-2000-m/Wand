@@ -25,6 +25,9 @@ def fetch_available_models(api_key, base_url):
 
 def chat_completion(api_key, base_url, model, messages, temperature=0.7):
     try:
+        sys.stderr.write(f"[DEBUG] chat_completion using model: {model}\n")
+        sys.stderr.flush()
+        
         client = OpenAI(
             api_key=api_key,
             base_url=base_url if base_url else None
@@ -43,6 +46,9 @@ def chat_completion(api_key, base_url, model, messages, temperature=0.7):
 
 def chat_completion_stream(api_key, base_url, model, messages, temperature=0.7):
     try:
+        sys.stderr.write(f"[DEBUG] chat_completion_stream using model: {model}\n")
+        sys.stderr.flush()
+
         client = OpenAI(
             api_key=api_key,
             base_url=base_url if base_url else None
