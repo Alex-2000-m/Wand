@@ -10,6 +10,14 @@ export class AIService {
     this.setupHandlers();
   }
 
+  // Resolve Python backend entry; works in dev and in packaged app
+  private getBackendScriptPath() {
+    if (process.env.NODE_ENV === 'development') {
+      return path.join(process.cwd(), 'src', 'backend', 'cli.py');
+    }
+    return path.join(process.resourcesPath, 'backend', 'cli.py');
+  }
+
   private setupHandlers() {
     ipcMain.on('ai:chat-stream', (event, { message, history, config }) => {
       this.processMessageStream(event, message, history, config);
@@ -42,7 +50,7 @@ export class AIService {
 
   private saveTool(name: string, code: string, description: string): Promise<any> {
     return new Promise((resolve, reject) => {
-      const scriptPath = path.join(process.cwd(), 'src', 'backend', 'cli.py');
+      const scriptPath = this.getBackendScriptPath();
       const pythonProcess = spawn('python', [scriptPath]);
 
       const inputData = JSON.stringify({ 
@@ -72,7 +80,7 @@ export class AIService {
 
   private clearTempTools(): Promise<any> {
     return new Promise((resolve, reject) => {
-      const scriptPath = path.join(process.cwd(), 'src', 'backend', 'cli.py');
+      const scriptPath = this.getBackendScriptPath();
       const pythonProcess = spawn('python', [scriptPath]);
 
       const inputData = JSON.stringify({ type: 'clear_temp_tools', config: {} });
@@ -95,7 +103,7 @@ export class AIService {
   private getTools(config: any): Promise<any> {
     return new Promise((resolve, reject) => {
       console.log('Fetching tools via Python CLI');
-      const scriptPath = path.join(process.cwd(), 'src', 'backend', 'cli.py');
+      const scriptPath = this.getBackendScriptPath();
       const pythonProcess = spawn('python', [scriptPath]);
 
       const inputData = JSON.stringify({ type: 'get_tools', config });
@@ -135,7 +143,7 @@ export class AIService {
   private fetchModels(config: any): Promise<any> {
     return new Promise((resolve, reject) => {
       console.log('Fetching models via Python CLI');
-      const scriptPath = path.join(process.cwd(), 'src', 'backend', 'cli.py');
+      const scriptPath = this.getBackendScriptPath();
       const pythonProcess = spawn('python', [scriptPath]);
 
       const inputData = JSON.stringify({ type: 'fetch_models', config });
@@ -181,7 +189,7 @@ export class AIService {
       this.currentProcess = null;
     }
 
-    const scriptPath = path.join(process.cwd(), 'src', 'backend', 'cli.py');
+    const scriptPath = this.getBackendScriptPath();
     const pythonProcess = spawn('python', [scriptPath]);
     this.currentProcess = pythonProcess;
 
