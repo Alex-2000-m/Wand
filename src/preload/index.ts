@@ -45,7 +45,9 @@ const api = {
   exists: (path: string) => ipcRenderer.invoke('fs:exists', path),
   showOpenDialog: () => ipcRenderer.invoke('dialog:showOpenDialog'),
   clearTempTools: () => ipcRenderer.invoke('ai:clear-temp-tools'),
-  saveTool: (name: string, code: string, description: string) => ipcRenderer.invoke('ai:save-tool', name, code, description)
+  saveTool: (name: string, code: string, description: string, permission_level?: number, tool_type?: string, is_gen?: boolean, metadata?: any) => ipcRenderer.invoke('ai:save-tool', name, code, description, permission_level, tool_type, is_gen, metadata),
+  deleteTool: (name: string) => ipcRenderer.invoke('ai:delete-tool', name),
+  getAllTools: () => ipcRenderer.invoke('ai:get-all-tools')
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

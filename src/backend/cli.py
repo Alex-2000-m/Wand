@@ -6,6 +6,12 @@ from llm_processor import LLMProcessor
 from tools import get_tools_definitions
 from ShareMemory.P10_config import P10Config
 
+# Try to load temporary tools so they are registered in P10Config.TOOLS
+try:
+    import tools_tmp
+except (ImportError, Exception):
+    pass
+
 # Set encoding to utf-8 for stdin/stdout/stderr to handle Chinese characters correctly
 sys.stdin.reconfigure(encoding='utf-8')
 sys.stdout.reconfigure(encoding='utf-8')
@@ -47,13 +53,43 @@ def main():
         if command_type == 'save_tool':
             from tools import save_tool
             tool_data = request_data.get('tool_data', {})
-            result = save_tool(tool_data.get('name'), tool_data.get('code'), tool_data.get('description'))
+            result = save_tool(
+                tool_data.get('name'), 
+                tool_data.get('code'), 
+                tool_data.get('description'),
+                tool_data.get('permission_level', 9),
+                tool_data.get('tool_type', 'general'),
+                tool_data.get('is_gen', True),
+                tool_data.get('metadata', {})
+            )
+            print(json.dumps({'status': 'success', 'message': result}))
+            return
+
+        if command_type == 'delete_tool':
+            from tools import delete_tool
+            name = request_data.get('name')
+            result = delete_tool(name)
+            print(json.dumps({'status': 'success', 'message': result}))
+            return
+
+        if command_type == 'update_tool_visibility':
+            from tools import update_tool_visibility_config
+            name = request_data.get('name')
+            visible = request_data.get('visible')
+            result = update_tool_visibility_config(name, visible)
             print(json.dumps({'status': 'success', 'message': result}))
             return
 
         if command_type == 'get_tools':
             tools = get_tools_definitions()
             print(json.dumps({'tools': tools}))
+            return
+
+        if command_type == 'get_all_tools':
+            from tools import P10Config
+            tools_dict = P10Config.TOOLS.get_all_tools()
+            tools_list = list(tools_dict.values())
+            print(json.dumps({'tools': tools_list}))
             return
 
         if not api_key:

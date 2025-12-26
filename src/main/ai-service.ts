@@ -8,6 +8,10 @@ export class AIService {
 
   constructor() {
     this.setupHandlers();
+    // Clear temporary tools on startup to ensure a fresh state
+    this.clearTempTools().catch(err => {
+      console.error('Failed to clear temporary tools on startup:', err);
+    });
   }
 
   // Resolve Python backend entry; works in dev and in packaged app
@@ -39,16 +43,58 @@ export class AIService {
       return this.getTools(config);
     });
 
+    ipcMain.handle('ai:get-all-tools', async (event, config) => {
+      return this.getAllTools(config);
+    });
+
     ipcMain.handle('ai:clear-temp-tools', async (event) => {
       return this.clearTempTools();
     });
 
-    ipcMain.handle('ai:save-tool', async (event, name, code, description) => {
-      return this.saveTool(name, code, description);
+    ipcMain.handle('ai:save-tool', async (event, name, code, description, permission_level, tool_type, is_gen, metadata) => {
+      return this.saveTool(name, code, description, permission_level, tool_type, is_gen, metadata);
+    });
+
+    ipcMain.handle('ai:delete-tool', async (event, name) => {
+      return this.deleteTool(name);
+    });
+
+    ipcMain.handle('ai:update-tool-visibility', async (event, name, visible) => {
+      return this.updateToolVisibility(name, visible);
     });
   }
 
-  private saveTool(name: string, code: string, description: string): Promise<any> {
+  private updateToolVisibility(name: string, visible: boolean): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const scriptPath = this.getBackendScriptPath();
+      const pythonProcess = spawn('python', [scriptPath]);
+
+      const inputData = JSON.stringify({ 
+        type: 'update_tool_visibility', 
+        name, 
+        visible 
+      });
+      pythonProcess.stdin.write(inputData);
+      pythonProcess.stdin.end();
+
+      let outputData = '';
+      pythonProcess.stdout.on('data', (data) => { outputData += data.toString(); });
+      
+      pythonProcess.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Python script exited with code ${code}`));
+        } else {
+          try {
+            resolve(JSON.parse(outputData));
+          } catch (e) {
+            reject(new Error(`Failed to parse output: ${outputData}`));
+          }
+        }
+      });
+    });
+  }
+
+  private saveTool(name: string, code: string, description: string, permission_level?: number, tool_type?: string, is_gen?: boolean, metadata?: any): Promise<any> {
     return new Promise((resolve, reject) => {
       const scriptPath = this.getBackendScriptPath();
       const pythonProcess = spawn('python', [scriptPath]);
@@ -56,7 +102,36 @@ export class AIService {
       const inputData = JSON.stringify({ 
         type: 'save_tool', 
         config: {}, 
-        tool_data: { name, code, description } 
+        tool_data: { name, code, description, permission_level, tool_type, is_gen, metadata } 
+      });
+      pythonProcess.stdin.write(inputData);
+      pythonProcess.stdin.end();
+
+      let outputData = '';
+      pythonProcess.stdout.on('data', (data) => { outputData += data.toString(); });
+      
+      pythonProcess.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Python script exited with code ${code}`));
+        } else {
+          try {
+            resolve(JSON.parse(outputData));
+          } catch (e) {
+            reject(new Error(`Failed to parse output: ${outputData}`));
+          }
+        }
+      });
+    });
+  }
+
+  private deleteTool(name: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const scriptPath = this.getBackendScriptPath();
+      const pythonProcess = spawn('python', [scriptPath]);
+
+      const inputData = JSON.stringify({ 
+        type: 'delete_tool', 
+        name 
       });
       pythonProcess.stdin.write(inputData);
       pythonProcess.stdin.end();
@@ -107,6 +182,46 @@ export class AIService {
       const pythonProcess = spawn('python', [scriptPath]);
 
       const inputData = JSON.stringify({ type: 'get_tools', config });
+      pythonProcess.stdin.write(inputData);
+      pythonProcess.stdin.end();
+
+      let outputData = '';
+      let errorData = '';
+
+      pythonProcess.stdout.on('data', (data) => {
+        outputData += data.toString();
+      });
+
+      pythonProcess.stderr.on('data', (data) => {
+        errorData += data.toString();
+      });
+
+      pythonProcess.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`Python script exited with code ${code}: ${errorData}`));
+          return;
+        }
+        try {
+          const result = JSON.parse(outputData);
+          if (result.error) {
+            reject(new Error(result.error));
+          } else {
+            resolve(result.tools);
+          }
+        } catch (e) {
+          reject(new Error(`Failed to parse Python output: ${outputData}`));
+        }
+      });
+    });
+  }
+
+  private getAllTools(config: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      console.log('Fetching all tools via Python CLI');
+      const scriptPath = this.getBackendScriptPath();
+      const pythonProcess = spawn('python', [scriptPath]);
+
+      const inputData = JSON.stringify({ type: 'get_all_tools', config });
       pythonProcess.stdin.write(inputData);
       pythonProcess.stdin.end();
 

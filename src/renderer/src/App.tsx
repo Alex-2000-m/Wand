@@ -72,6 +72,32 @@ function App() {
   const [isDraggingLeft, setIsDraggingLeft] = useState(false);
   const [isDraggingRight, setIsDraggingRight] = useState(false);
 
+  // Sync tools visibility from localStorage on startup
+  useEffect(() => {
+    const syncTools = async () => {
+      try {
+        const savedEnabled = localStorage.getItem('wand_enabled_tools');
+        if (savedEnabled) {
+          const enabledSet = new Set<string>(JSON.parse(savedEnabled));
+          // @ts-ignore
+          const tools = await window.electron.ipcRenderer.invoke('ai:get-tools', {});
+          
+          for (const tool of tools) {
+            const shouldBeVisible = enabledSet.has(tool.name);
+            if (tool.is_visible !== shouldBeVisible) {
+              // @ts-ignore
+              await window.electron.ipcRenderer.invoke('ai:update-tool-visibility', tool.name, shouldBeVisible);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to sync tools visibility:', err);
+      }
+    };
+    
+    syncTools();
+  }, []);
+
   useEffect(() => {
     if (projectPath) {
       localStorage.setItem('wand_last_project_path', projectPath);

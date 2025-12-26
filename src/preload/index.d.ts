@@ -22,7 +22,9 @@ declare global {
       exists: (path: string) => Promise<boolean>
       showOpenDialog: () => Promise<{ canceled: boolean; filePaths: string[] }>
       clearTempTools: () => Promise<any>
-      saveTool: (name: string, code: string, description: string) => Promise<any>
+      saveTool: (name: string, code: string, description: string, permission_level?: number, tool_type?: string, is_gen?: boolean, metadata?: any) => Promise<any>
+      deleteTool: (name: string) => Promise<any>
+      getAllTools: () => Promise<any>
     }
   }
 }
