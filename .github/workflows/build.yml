@@ -60,6 +60,8 @@ jobs:
           body: "See the assets to download and install this version."
           draft: false
           prerelease: false
+          overwrite: true
+          fail_on_unmatched_files: true
           files: |
             dist/*.exe
             dist/win-unpacked/**
