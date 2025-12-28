@@ -59,7 +59,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          name: "Lumina Note ${{ github.ref_name }}"
+          name: "Wand ${{ github.ref_name }}"
           body: "See the assets to download and install this version."
           draft: false
           prerelease: false
