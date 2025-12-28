@@ -22,6 +22,15 @@ export class AIService {
     return path.join(process.resourcesPath, 'backend', 'cli.py');
   }
 
+  // Resolve Python executable path
+  private getPythonPath() {
+    if (process.env.NODE_ENV === 'development') {
+      return 'python'; // Use system python in dev
+    }
+    // In production, use the embedded python executable directly
+    return path.join(process.resourcesPath, 'python_env', 'python.exe');
+  }
+
   private setupHandlers() {
     ipcMain.on('ai:chat-stream', (event, { message, history, config }) => {
       this.processMessageStream(event, message, history, config);
@@ -67,7 +76,7 @@ export class AIService {
   private updateToolVisibility(name: string, visible: boolean): Promise<any> {
     return new Promise((resolve, reject) => {
       const scriptPath = this.getBackendScriptPath();
-      const pythonProcess = spawn('python', [scriptPath]);
+      const pythonProcess = spawn(this.getPythonPath(), [scriptPath]);
 
       const inputData = JSON.stringify({ 
         type: 'update_tool_visibility', 
@@ -97,7 +106,7 @@ export class AIService {
   private saveTool(name: string, code: string, description: string, permission_level?: number, tool_type?: string, is_gen?: boolean, metadata?: any): Promise<any> {
     return new Promise((resolve, reject) => {
       const scriptPath = this.getBackendScriptPath();
-      const pythonProcess = spawn('python', [scriptPath]);
+      const pythonProcess = spawn(this.getPythonPath(), [scriptPath]);
 
       const inputData = JSON.stringify({ 
         type: 'save_tool', 
@@ -127,7 +136,7 @@ export class AIService {
   private deleteTool(name: string): Promise<any> {
     return new Promise((resolve, reject) => {
       const scriptPath = this.getBackendScriptPath();
-      const pythonProcess = spawn('python', [scriptPath]);
+      const pythonProcess = spawn(this.getPythonPath(), [scriptPath]);
 
       const inputData = JSON.stringify({ 
         type: 'delete_tool', 
@@ -156,7 +165,7 @@ export class AIService {
   private clearTempTools(): Promise<any> {
     return new Promise((resolve, reject) => {
       const scriptPath = this.getBackendScriptPath();
-      const pythonProcess = spawn('python', [scriptPath]);
+      const pythonProcess = spawn(this.getPythonPath(), [scriptPath]);
 
       const inputData = JSON.stringify({ type: 'clear_temp_tools', config: {} });
       pythonProcess.stdin.write(inputData);
@@ -179,7 +188,7 @@ export class AIService {
     return new Promise((resolve, reject) => {
       console.log('Fetching tools via Python CLI');
       const scriptPath = this.getBackendScriptPath();
-      const pythonProcess = spawn('python', [scriptPath]);
+      const pythonProcess = spawn(this.getPythonPath(), [scriptPath]);
 
       const inputData = JSON.stringify({ type: 'get_tools', config });
       pythonProcess.stdin.write(inputData);
@@ -219,7 +228,7 @@ export class AIService {
     return new Promise((resolve, reject) => {
       console.log('Fetching all tools via Python CLI');
       const scriptPath = this.getBackendScriptPath();
-      const pythonProcess = spawn('python', [scriptPath]);
+      const pythonProcess = spawn(this.getPythonPath(), [scriptPath]);
 
       const inputData = JSON.stringify({ type: 'get_all_tools', config });
       pythonProcess.stdin.write(inputData);
@@ -259,7 +268,7 @@ export class AIService {
     return new Promise((resolve, reject) => {
       console.log('Fetching models via Python CLI');
       const scriptPath = this.getBackendScriptPath();
-      const pythonProcess = spawn('python', [scriptPath]);
+      const pythonProcess = spawn(this.getPythonPath(), [scriptPath]);
 
       const inputData = JSON.stringify({ type: 'fetch_models', config });
       pythonProcess.stdin.write(inputData);
@@ -305,7 +314,7 @@ export class AIService {
     }
 
     const scriptPath = this.getBackendScriptPath();
-    const pythonProcess = spawn('python', [scriptPath]);
+    const pythonProcess = spawn(this.getPythonPath(), [scriptPath]);
     this.currentProcess = pythonProcess;
 
     // Send data to Python script via stdin
