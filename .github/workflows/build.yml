@@ -55,16 +55,19 @@ jobs:
       - name: Create GitHub release with custom name and body
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          name: "Lumina Note ${{ github.ref_name }}"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: "Wand ${{ github.ref_name }}"
           body: "See the assets to download and install this version."
           draft: false
           prerelease: false
           fail_on_unmatched_files: true
           files: |
             dist/*.exe
-            dist/win-unpacked/**
             dist/*.yml
+            dist/*.blockmap
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
