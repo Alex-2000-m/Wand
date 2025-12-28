@@ -341,8 +341,11 @@ export class AIService {
     });
 
     // Collect error from stderr
+    let stderrOutput = '';
     pythonProcess.stderr.on('data', (data) => {
-      console.error('Python stderr:', data.toString());
+      const errorStr = data.toString();
+      console.error('Python stderr:', errorStr);
+      stderrOutput += errorStr;
     });
 
     pythonProcess.on('close', (code) => {
@@ -350,7 +353,7 @@ export class AIService {
         this.currentProcess = null;
       }
       if (code !== 0 && code !== null) { // code is null if killed
-        event.reply('ai:chat-error', `Python script exited with code ${code}`);
+        event.reply('ai:chat-error', `Python script exited with code ${code}. Error: ${stderrOutput}`);
       }
       event.reply('ai:chat-done');
     });

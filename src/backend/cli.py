@@ -1,6 +1,13 @@
 import sys
 import json
 import os
+
+# Ensure the directory containing this script is in sys.path
+# This is crucial for embedded Python environments to find sibling modules
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if script_dir not in sys.path:
+    sys.path.insert(0, script_dir)
+
 from api_client import fetch_available_models
 from llm_processor import LLMProcessor
 from tools import get_tools_definitions
